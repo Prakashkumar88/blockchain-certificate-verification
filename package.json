@@ -1,0 +1,26 @@
+{
+  "name": "certificate-verification",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "npm run build -w backend",
+    "dev": "npm run dev -w backend",
+    "typecheck": "npm run typecheck -w backend",
+    "lint": "npm run lint -w backend",
+    "format": "prettier --write backend scripts package.json compose.yaml README.md",
+    "format:check": "prettier --check backend scripts package.json compose.yaml README.md",
+    "test": "npm run test:unit -w backend",
+    "test:unit": "npm run test:unit -w backend",
+    "test:integration": "npm run test:integration -w backend",
+    "abi:export": "node scripts/export-abi.mjs",
+    "abi:check": "node scripts/export-abi.mjs --check"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

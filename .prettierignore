@@ -1,0 +1,6 @@
+node_modules
+contracts
+package-lock.json
+backend/dist
+backend/src/contracts/CertificateRegistry.json
+deployments/*.local.json

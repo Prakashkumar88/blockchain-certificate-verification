@@ -1,0 +1,5 @@
+CertificateRegistryGasTest:test_GasBatch1() (gas: 109443)
+CertificateRegistryGasTest:test_GasBatch10() (gas: 759834)
+CertificateRegistryGasTest:test_GasBatch25() (gas: 1844080)
+CertificateRegistryGasTest:test_GasBatch50() (gas: 3651527)
+CertificateRegistryGasTest:test_GasSingle() (gas: 105675)

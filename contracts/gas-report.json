@@ -1,0 +1,48 @@
+{
+  "chainId": 31337,
+  "hardfork": "cancun",
+  "blockGasLimit": 30000000,
+  "compiler": "0.8.30+commit.73712a01",
+  "optimizerRuns": 200,
+  "foundry": "forge Version: 1.8.5",
+  "registry": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+  "digestFixture": "0x003908007d298dc76ef0d440f7fbd6d11e5c277baed90452b56692341945f236",
+  "gas": [
+    {
+      "operation": "single",
+      "batchSize": 1,
+      "gasUsed": 94125
+    },
+    {
+      "operation": "batch",
+      "batchSize": 1,
+      "gasUsed": 95397
+    },
+    {
+      "operation": "batch",
+      "batchSize": 10,
+      "gasUsed": 730028
+    },
+    {
+      "operation": "batch",
+      "batchSize": 25,
+      "gasUsed": 1787744
+    },
+    {
+      "operation": "batch",
+      "batchSize": 50,
+      "gasUsed": 3550658
+    },
+    {
+      "operation": "batch-dense-calldata",
+      "batchSize": 50,
+      "gasUsed": 3550826
+    }
+  ],
+  "revertedBatch": {
+    "status": 0,
+    "persistedLogs": 0,
+    "freshIdAbsent": true
+  },
+  "note": "Actual local receipt gas includes intrinsic/calldata gas. Public-network limits not validated."
+}
