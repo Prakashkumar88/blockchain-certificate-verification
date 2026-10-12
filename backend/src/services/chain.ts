@@ -79,6 +79,8 @@ export interface TxResult {
 }
 export interface Chain {
   inspect(id: string, digest?: string): Promise<ChainSnapshot>;
+  /** IDs (from `ids`) already recorded on-chain, read at one consistent block. */
+  existing(ids: string[]): Promise<Set<string>>;
   roles(wallet: string): Promise<{ issuer: boolean; admin: boolean }>;
   maxBatch(): Promise<number>;
   isEoa(wallet: string): Promise<boolean>;
@@ -277,6 +279,14 @@ export class RegistryChain implements Chain {
           fail(503, "CONTRACT_CALL_FAILED");
       }
       return { ...record, block, comparison };
+    });
+  }
+  async existing(ids: string[]) {
+    return this.snapshot(async (block) => {
+      const found = new Set<string>();
+      for (const id of ids)
+        if ((await this.readRecord(id, block.number)).exists) found.add(id);
+      return found;
     });
   }
   async roles(wallet: string) {

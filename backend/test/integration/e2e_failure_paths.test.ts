@@ -219,6 +219,50 @@ describe("E2E failure paths (Backend + Mongo + Anvil, programmatic client signer
     expect((await verification(app, certificateId)).body.status).toBe("VALID");
   });
 
+  it("resumed draft: issued=false until confirmed, then issued=true and re-prepare is a 409", async () => {
+    const { draftId, certificateId, transaction } = await preparedDraft();
+    const lookup = () =>
+      request(app)
+        .get(`/api/v1/issuance-drafts/${draftId}`)
+        .set("Cookie", cookie);
+    const listed = async () =>
+      (
+        await request(app).get("/api/v1/issuer/drafts").set("Cookie", cookie)
+      ).body.drafts.find((d: { draftId: string }) => d.draftId === draftId);
+    expect((await lookup()).body).toMatchObject({
+      draftId,
+      certificateId,
+      issued: false,
+    });
+    expect((await listed()).issued).toBe(false);
+    // Resuming a valid draft prepares the same transaction again (no re-upload).
+    const again = await post(
+      app,
+      `/api/v1/issuance-drafts/${draftId}/prepare`,
+    ).send({});
+    expect(again.status).toBe(200);
+    expect(again.body.transaction.data).toBe(transaction.data);
+    const tx = await env.issuer.sendTransaction({
+      to: transaction.to,
+      data: transaction.data,
+    });
+    await mined(env.provider, tx);
+    expect((await reconcile(app, draftId, tx.hash)).body.status).toBe(
+      "CONFIRMED",
+    );
+    expect((await lookup()).body.issued).toBe(true);
+    expect((await listed()).issued).toBe(true);
+    const dup = await post(
+      app,
+      `/api/v1/issuance-drafts/${draftId}/prepare`,
+    ).send({});
+    expect(dup.status).toBe(409);
+    expect(dup.body.error).toMatchObject({
+      code: "TRANSACTION_WOULD_REVERT",
+      contractError: "CertificateAlreadyExists",
+    });
+  });
+
   it("transaction from another sender is rejected as TRANSACTION_MISMATCH", async () => {
     const { draftId, certificateId, transaction } = await preparedDraft();
     const hash: string = await env.provider.send("eth_sendTransaction", [

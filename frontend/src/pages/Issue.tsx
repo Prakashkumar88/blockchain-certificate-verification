@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
+import { apiErrorMessage, ALREADY_ISSUED_MESSAGE } from '../services/apiErrors';
 import { submitPreparedTransaction } from '../services/preparedTransaction';
 import { useWallet } from '../contexts/WalletContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,6 +42,45 @@ export default function Issue() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+
+  // Resuming an existing draft (`/issue?draft=<id>` from the dashboard) loads it for review only;
+  // it never re-uploads or re-hashes the PDF.
+  const [searchParams] = useSearchParams();
+  const resumeDraftId = searchParams.get('draft');
+  const invalidResumeLink = resumeDraftId !== null && !/^0x[0-9a-fA-F]{64}$/.test(resumeDraftId);
+  const [resuming, setResuming] = useState(resumeDraftId !== null && !invalidResumeLink);
+  const loadedDraftId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!resumeDraftId || invalidResumeLink || !isAuthenticated || !isCorrectNetwork) return;
+    // Marked only once applied: StrictMode (dev) cancels the first run, which must not block the retry.
+    if (loadedDraftId.current === resumeDraftId) return;
+    let active = true;
+    api.issuance.getDraft(resumeDraftId)
+      .then((loaded) => {
+        if (!active) return;
+        if (loaded?.draftId?.toLowerCase() !== resumeDraftId.toLowerCase()) {
+          throw new Error('Draft response does not match the selected draft.');
+        }
+        loadedDraftId.current = resumeDraftId;
+        // The backend reports on-chain state; an issued draft has nothing left to sign.
+        if (loaded.issued) {
+          setError(ALREADY_ISSUED_MESSAGE);
+          return;
+        }
+        setDraft(loaded);
+        setStep(2);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError((err as { code?: string })?.code === 'DRAFT_NOT_FOUND'
+          ? 'This draft was not found or has expired. Upload the PDF again to create a new draft.'
+          : apiErrorMessage(err, 'Failed to load the selected draft.'));
+      })
+      .finally(() => { if (active) setResuming(false); });
+    return () => { active = false; };
+  }, [resumeDraftId, invalidResumeLink, isAuthenticated, isCorrectNetwork]);
+  const shownError = error ?? (invalidResumeLink ? 'Invalid draft link. Open the draft again from the Issuer Dashboard.' : null);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -99,7 +139,7 @@ export default function Issue() {
       setDraft(res);
       setStep(2);
     } catch (err: any) {
-      setError(err.message || 'Failed to upload document');
+      setError(apiErrorMessage(err, 'Failed to upload document'));
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +151,9 @@ export default function Issue() {
     await transaction.run(() => submitPreparedTransaction({
       provider, signer, getSnapshot,
       intent: { kind: 'issue', ids: [draft.certificateId], digests: [draft.documentHash] },
-      prepare: () => api.issuance.prepareIssue(draft.draftId),
+      prepare: () => api.issuance.prepareIssue(draft.draftId).catch((err) => {
+        throw new Error(apiErrorMessage(err, 'Failed to prepare the transaction.'));
+      }),
     }), (hash) => api.issuance.submitIssueTx(draft.draftId, hash));
   };
 
@@ -194,20 +236,24 @@ export default function Issue() {
       </div>
 
       {/* Error Alert */}
-      {error && (
+      {shownError && (
         <div className="rounded-lg bg-rose-50 border border-rose-200 p-4 flex items-start gap-3 text-rose-800">
           <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
           <div className="text-sm">
             <span className="font-semibold">Error: </span>
-            {error}
+            {shownError}
           </div>
         </div>
       )}
 
       {/* Card Content based on Step */}
       <Card className="shadow-xs">
+        {step === 1 && resuming && (
+          <div className="p-6 sm:p-8 text-sm text-slate-500" role="status">Loading saved draft…</div>
+        )}
+
         {/* Step 1: Upload & Prepare */}
-        {step === 1 && (
+        {step === 1 && !resuming && (
           <form onSubmit={handleUpload}>
             <div className="p-6 sm:p-8 space-y-6">
               <div>

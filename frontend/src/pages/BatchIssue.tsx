@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../services/api';
+import { apiErrorMessage } from '../services/apiErrors';
 import { submitPreparedTransaction } from '../services/preparedTransaction';
 import { useWallet } from '../contexts/WalletContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -45,9 +46,10 @@ export default function BatchIssue() {
     try {
       setLoadingDrafts(true);
       const res = await api.issuance.getDrafts();
-      setDrafts(res.drafts || []);
+      // Already-issued drafts would only revert on-chain, so they are not selectable.
+      setDrafts((res.drafts || []).filter((d: { issued?: boolean }) => !d.issued));
     } catch (err: any) {
-      setError(err.message || 'Failed to load drafts from server');
+      setError(apiErrorMessage(err, 'Failed to load drafts from server'));
     } finally {
       setLoadingDrafts(false);
     }

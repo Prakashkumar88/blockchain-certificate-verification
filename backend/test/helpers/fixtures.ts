@@ -172,6 +172,7 @@ export function mockChain() {
       record: record(),
       block: { number: 10, hash: id(10), timestamp: 1000 },
     }),
+    existing: vi.fn<Chain["existing"]>().mockResolvedValue(new Set<string>()),
     roles: vi
       .fn<Chain["roles"]>()
       .mockResolvedValue({ issuer: true, admin: false }),

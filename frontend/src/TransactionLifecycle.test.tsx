@@ -92,6 +92,7 @@ beforeEach(() => {
     revision: 1,
     getSnapshot: () => ({ address: issuerAddress, chainId: 31337, revision: 1 }),
     connect: vi.fn(),
+    switchNetwork: vi.fn(),
     error: null,
   });
   vi.spyOn(AuthModule, 'useAuth').mockReturnValue({

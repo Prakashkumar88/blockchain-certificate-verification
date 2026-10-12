@@ -124,6 +124,8 @@ export const api = {
         body: formData,
       });
     },
+    // Owner-scoped on the backend: only the issuer's own unexpired drafts are returned.
+    getDraft: (draftId: string) => fetchApi<{ draftId: string; certificateId: string; documentHash: string; expiresAt: string; issued?: boolean }>(`/issuance-drafts/${draftId}`),
     getDrafts: (cursor: number = 0, limit: number = 25) => fetchApi<any>(`/issuer/drafts?cursor=${cursor}&limit=${limit}`),
     prepareIssue: (draftId: string) => fetchApi<{ status: string; transaction: PreparedTransaction }>(`/issuance-drafts/${draftId}/prepare`, {
       method: 'POST',

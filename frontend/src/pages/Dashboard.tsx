@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { apiErrorMessage, isIssuerRequired } from '../services/apiErrors';
 import { useAuth } from '../contexts/AuthContext';
 import { useWallet } from '../contexts/WalletContext';
 import { 
@@ -33,15 +34,20 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isRevokeOpen, setIsRevokeOpen] = useState(false);
+  // Derived only from the backend's issuer-only endpoint, which checks ISSUER_ROLE on-chain.
+  const [issuerRole, setIssuerRole] = useState<'checking' | 'verified' | 'missing' | 'unknown'>('checking');
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
+      setIssuerRole('checking');
       const draftsData = await api.issuance.getDrafts();
       setDrafts(draftsData.drafts || []);
+      setIssuerRole('verified');
     } catch (err: any) {
-      setError(err.message || 'Failed to retrieve drafts from server.');
+      setIssuerRole(isIssuerRequired(err) ? 'missing' : 'unknown');
+      setError(apiErrorMessage(err, 'Failed to retrieve drafts from server.'));
     } finally {
       setLoading(false);
     }
@@ -223,9 +229,20 @@ export default function Dashboard() {
           <p className="text-sm font-bold font-mono text-slate-900 mt-2 truncate">
             {address ? `${address.slice(0, 8)}...${address.slice(-6)}` : 'Connected'}
           </p>
-          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Verified Issuer Role
-          </p>
+          {issuerRole === 'verified' ? (
+            <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Verified Issuer Role
+            </p>
+          ) : issuerRole === 'missing' ? (
+            <p className="text-xs text-rose-600 mt-1 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span> Not an Authorized Issuer
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+              {issuerRole === 'checking' ? 'Checking Issuer Role…' : 'Issuer Role Unverified'}
+            </p>
+          )}
         </Card>
       </div>
 
@@ -340,21 +357,32 @@ export default function Dashboard() {
                       </div>
                     </td>
                     <td className="py-3.5 px-4 sm:px-6">
-                      <Badge status="info" size="sm">
-                        Ready to Sign
-                      </Badge>
+                      {/* `issued` comes from the chain; only unissued drafts can still be signed. */}
+                      {draft.issued ? (
+                        <Badge status="success" size="sm">
+                          Already Issued
+                        </Badge>
+                      ) : (
+                        <Badge status="info" size="sm">
+                          Ready to Sign
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 sm:px-6 text-right">
-                      <Link to={`/issue?draft=${draft.draftId}`}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          rightIcon={<ArrowRight className="h-3 w-3 text-slate-400" />}
-                          className="text-xs h-7 px-2.5"
-                        >
-                          Complete
-                        </Button>
-                      </Link>
+                      {draft.issued ? (
+                        <span className="text-xs text-slate-400">On-chain</span>
+                      ) : (
+                        <Link to={`/issue?draft=${draft.draftId}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            rightIcon={<ArrowRight className="h-3 w-3 text-slate-400" />}
+                            className="text-xs h-7 px-2.5"
+                          >
+                            Complete
+                          </Button>
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))

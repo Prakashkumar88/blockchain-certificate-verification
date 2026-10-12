@@ -12,6 +12,7 @@ interface WalletContextType extends WalletSnapshot {
   isCorrectNetwork: boolean;
   getSnapshot: () => WalletSnapshot;
   connect: () => Promise<void>;
+  switchNetwork: () => Promise<void>;
   error: string | null;
 }
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -94,7 +95,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!connection.current) { setError('No Web3 wallet found. Please install MetaMask.'); return; }
     await connection.current();
   };
-  return <WalletContext.Provider value={{ ...snapshot, provider, signer, getSnapshot, connect, error, isCorrectNetwork: snapshot.chainId === TARGET_CHAIN_ID }}>
+  // Only asks the wallet to switch; state still updates solely from the wallet's chainChanged event.
+  const switchNetwork = async () => {
+    const ethereum = window.ethereum;
+    if (!ethereum) { setError('No Web3 wallet found. Please install MetaMask.'); return; }
+    try {
+      await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x' + TARGET_CHAIN_ID.toString(16) }] });
+      setError(null);
+    } catch (e) {
+      const code = (e as { code?: number })?.code;
+      setError(code === 4902
+        ? `Chain ${TARGET_CHAIN_ID} is not added to your wallet. Add it, then switch to it.`
+        : code === 4001 ? 'Network switch was rejected in the wallet.' : e instanceof Error ? e.message : 'Network switch failed');
+    }
+  };
+  return <WalletContext.Provider value={{ ...snapshot, provider, signer, getSnapshot, connect, switchNetwork, error, isCorrectNetwork: snapshot.chainId === TARGET_CHAIN_ID }}>
     {children}
   </WalletContext.Provider>;
 }

@@ -47,6 +47,7 @@ describe('RevokeModal Component', () => {
       getSnapshot: () => ({ address: userAddress, chainId: 31337, revision: 1 }),
       isCorrectNetwork: true,
       connect: vi.fn(),
+    switchNetwork: vi.fn(),
       error: null,
     });
   });

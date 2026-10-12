@@ -19,7 +19,7 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
 
 export function Navbar() {
-  const { address, isCorrectNetwork, connect } = useWallet();
+  const { address, isCorrectNetwork, connect, switchNetwork, chainId, error: walletError } = useWallet();
   const { isAuthenticated, login, logout, isLoading } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -89,13 +89,15 @@ export function Navbar() {
           {/* Right: Wallet & Auth Controls (Desktop) */}
           <div className="hidden md:flex items-center gap-3">
             {address && !isCorrectNetwork && (
-              <div 
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200"
-                title="Please switch to the target network in your wallet"
+              <button
+                type="button"
+                onClick={() => void switchNetwork()}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
+                title={walletError ?? `Wallet is on chain ${chainId ?? 'unknown'}. Click to switch to chain ${import.meta.env.VITE_NETWORK_CHAIN_ID || '31337'}.`}
               >
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                <span>Wrong Network</span>
-              </div>
+                <span>Wrong Network — Switch</span>
+              </button>
             )}
 
             {!address ? (
@@ -202,10 +204,14 @@ export function Navbar() {
 
           <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
             {address && !isCorrectNetwork && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50 text-amber-800 text-xs border border-amber-200">
+              <button
+                type="button"
+                onClick={() => void switchNetwork()}
+                className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50 text-amber-800 text-xs border border-amber-200 text-left"
+              >
                 <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                <span>Wrong Network. Switch wallet network to continue.</span>
-              </div>
+                <span>Wrong Network (chain {chainId ?? 'unknown'}). Tap to switch to chain {import.meta.env.VITE_NETWORK_CHAIN_ID || '31337'}.</span>
+              </button>
             )}
 
             {!address ? (

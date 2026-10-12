@@ -246,11 +246,14 @@ export function createApp(
       s.wallet,
       hex32.parse(req.params.draftId),
     );
+    // Drafts are never consumed in storage; the chain says whether the certificate already exists.
+    const issued = await chain.existing([d.certificateId]);
     res.json({
       draftId: d.key,
       certificateId: d.certificateId,
       documentHash: d.documentHash,
       expiresAt: d.expiresAt,
+      issued: issued.has(d.certificateId),
     });
   });
   router.post("/issuance-drafts/:draftId/prepare", async (req, res) => {
@@ -365,12 +368,16 @@ export function createApp(
     const s = await logged(req),
       p = pagination.parse(req.query);
     const drafts = await certificates.drafts(s.wallet, p.cursor, p.limit);
+    const issued = drafts.length
+      ? await chain.existing(drafts.map((d) => d.certificateId))
+      : new Set<string>();
     res.json({
       drafts: drafts.map((d) => ({
         draftId: d.key,
         certificateId: d.certificateId,
         documentHash: d.documentHash,
         expiresAt: d.expiresAt,
+        issued: issued.has(d.certificateId),
       })),
       nextCursor: drafts.length === p.limit ? p.cursor + p.limit : null,
     });

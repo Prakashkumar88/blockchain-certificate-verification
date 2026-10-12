@@ -230,6 +230,100 @@ it("rejects academic/private fields and Mongo operators", async () => {
       ).status,
     ).toBe(400);
 });
+it("SIWE-authenticated wallet without ISSUER_ROLE gets ISSUER_REQUIRED, checked live per request", async () => {
+  const s = setup();
+  s.chain.roles.mockResolvedValue({ issuer: false, admin: false });
+  const headers = await logged(s);
+  expect(
+    (await request(s.app).get("/api/v1/auth/session").set(headers)).body.wallet,
+  ).toBe(wallet);
+  const drafts = await request(s.app).get("/api/v1/issuer/drafts").set(headers);
+  expect(drafts.status).toBe(403);
+  expect(drafts.body.error.code).toBe("ISSUER_REQUIRED");
+  const upload = await request(s.app)
+    .post("/api/v1/issuance-drafts")
+    .set(headers)
+    .attach("pdf", pdf, "c.pdf");
+  expect(upload.status).toBe(403);
+  expect(upload.body.error.code).toBe("ISSUER_REQUIRED");
+  expect(s.chain.prepare).not.toHaveBeenCalled();
+  // The role is re-read on-chain each request; a later grant works without re-login.
+  s.chain.roles.mockResolvedValue({ issuer: true, admin: false });
+  expect(
+    (await request(s.app).get("/api/v1/issuer/drafts").set(headers)).status,
+  ).toBe(200);
+});
+it("draft list and lookup report on-chain issuance; issued drafts still cannot be re-prepared", async () => {
+  const s = setup();
+  const headers = await logged(s);
+  const upload = async () =>
+    (
+      await request(s.app)
+        .post("/api/v1/issuance-drafts")
+        .set(headers)
+        .attach("pdf", pdf, "c.pdf")
+    ).body as { draftId: string; certificateId: string };
+  const [fresh, used] = [await upload(), await upload()];
+  s.chain.existing.mockImplementation(
+    async (ids) => new Set(ids.filter((i) => i === used.certificateId)),
+  );
+  const list = await request(s.app).get("/api/v1/issuer/drafts").set(headers);
+  expect(list.status).toBe(200);
+  const byId = Object.fromEntries(
+    list.body.drafts.map((d: { draftId: string; issued: boolean }) => [
+      d.draftId,
+      d.issued,
+    ]),
+  );
+  expect(byId).toEqual({ [fresh.draftId]: false, [used.draftId]: true });
+  const one = await request(s.app)
+    .get(`/api/v1/issuance-drafts/${used.draftId}`)
+    .set(headers);
+  expect(one.body).toMatchObject({ draftId: used.draftId, issued: true });
+  // The conflict check is untouched: preparing an issued draft is still a 409 from simulation.
+  s.chain.prepare.mockRejectedValueOnce(
+    new ApiError(409, "TRANSACTION_WOULD_REVERT", "CertificateAlreadyExists"),
+  );
+  const prep = await request(s.app)
+    .post(`/api/v1/issuance-drafts/${used.draftId}/prepare`)
+    .set(headers)
+    .send({});
+  expect(prep.status).toBe(409);
+  expect(prep.body.error).toMatchObject({
+    code: "TRANSACTION_WOULD_REVERT",
+    contractError: "CertificateAlreadyExists",
+  });
+  const ok = await request(s.app)
+    .post(`/api/v1/issuance-drafts/${fresh.draftId}/prepare`)
+    .set(headers)
+    .send({});
+  expect(ok.status).toBe(200);
+  expect(ok.body.status).toBe("AWAITING_SIGNATURE");
+});
+it("expired draft is not found for lookup or prepare", async () => {
+  const s = setup();
+  const headers = await logged(s);
+  const d = (
+    await request(s.app)
+      .post("/api/v1/issuance-drafts")
+      .set(headers)
+      .attach("pdf", pdf, "c.pdf")
+  ).body as { draftId: string };
+  (s.store.rows.drafts[0] as { expiresAt: Date }).expiresAt = new Date(0);
+  for (const r of [
+    await request(s.app)
+      .get(`/api/v1/issuance-drafts/${d.draftId}`)
+      .set(headers),
+    await request(s.app)
+      .post(`/api/v1/issuance-drafts/${d.draftId}/prepare`)
+      .set(headers)
+      .send({}),
+  ]) {
+    expect(r.status).toBe(404);
+    expect(r.body.error.code).toBe("DRAFT_NOT_FOUND");
+  }
+  expect(s.chain.prepare).not.toHaveBeenCalled();
+});
 it("rejects admin revocation without being the original issuer", async () => {
   const s = setup();
   s.chain.roles.mockResolvedValue({ issuer: false, admin: true });
